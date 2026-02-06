@@ -1,0 +1,62 @@
+{
+  "$schema": "env-manifest-v1",
+  "required": [
+    {
+      "name": "DATABASE_URL",
+      "usage": "PostgreSQL connection string for Neon (serverless) or local pg",
+      "validation": "Must start with postgresql://",
+      "validatedInFile": "server/lib/env.ts",
+      "usedInFiles": ["server/db/index.ts"],
+      "whyRequired": "Core database connectivity required for all operations - every entity read/write depends on this"
+    },
+    {
+      "name": "JWT_SECRET",
+      "usage": "JWT signing key for access and refresh tokens (HMAC-SHA256)",
+      "validation": "Minimum 32 characters",
+      "validatedInFile": "server/lib/env.ts",
+      "usedInFiles": ["server/lib/auth.ts", "server/middleware/auth.ts"],
+      "whyRequired": "Authentication security - tokens must be cryptographically signed to prevent forgery"
+    },
+    {
+      "name": "APP_URL",
+      "usage": "Canonical application URL for CORS origin, callback URLs, and link generation",
+      "validation": "Must be a valid URL with scheme (e.g., https://app.example.com). No trailing slash.",
+      "validatedInFile": "server/lib/env.ts",
+      "usedInFiles": ["server/middleware/cors.ts", "server/lib/config.ts"],
+      "whyRequired": "CORS origin must be explicit in production - literal wildcard is forbidden"
+    }
+  ],
+  "conditionallyRequired": [
+    {
+      "name": "ENCRYPTION_KEY",
+      "condition": "Required when the application stores or processes sensitive/PII data that must be encrypted at rest. This application caches raw source files containing PII for up to 30 days, so ENCRYPTION_KEY applies. Omit only if all PII handling is removed.",
+      "usage": "AES-256-GCM encryption for source file data at rest during 30-day retention window",
+      "validation": "Must be 32 bytes (64 hex chars)",
+      "validatedInFile": "server/lib/env.ts",
+      "usedInFiles": ["server/lib/encryption.ts"],
+      "whyRequired": "Source data contains PII that must be encrypted at rest per GDPR compliance. De-identified output datasets do NOT require decryption - encryption protects raw source data only."
+    }
+  ],
+  "optional": [
+    {
+      "name": "PORT",
+      "default": "5000",
+      "usage": "Primary HTTP server listen port (externally-facing). Production: Express serves both SPA and API on this port (bound to 0.0.0.0). Development: When using dual-server setup (Vite + Express), PORT is the frontend dev server port (Vite on 5000) while the backend API runs on port 3001 (not controlled by PORT). Vite proxies /api requests to Express on 3001."
+    },
+    {
+      "name": "LOG_LEVEL",
+      "default": "info",
+      "usage": "Logging verbosity (debug, info, warn, error)"
+    },
+    {
+      "name": "NODE_ENV",
+      "default": "development",
+      "usage": "Runtime environment detection (development, production, test). Controls conditionallyRequired enforcement and database driver selection."
+    },
+    {
+      "name": "MAX_FILE_SIZE_BYTES",
+      "default": "52428800",
+      "usage": "Maximum upload file size in bytes (default 50MB per scope-manifest platformConstraints)"
+    }
+  ]
+}

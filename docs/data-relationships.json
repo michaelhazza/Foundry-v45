@@ -1,0 +1,453 @@
+{
+  "$schema": "data-relationships-v2",
+  "tables": [
+    {
+      "name": "organisations",
+      "tenantKey": "none",
+      "softDeleteColumn": "deletedAt",
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "name", "type": "string"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_organisations_deleted_at",
+          "columns": ["deletedAt"],
+          "rationale": "Soft-delete filter on every query against organisations"
+        }
+      ],
+      "serviceFile": "server/services/organisations.service.ts"
+    },
+    {
+      "name": "users",
+      "tenantKey": "direct",
+      "softDeleteColumn": "deletedAt",
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "organisationId", "type": "uuid", "references": "organisations.id"},
+        {"name": "email", "type": "string"},
+        {"name": "passwordHash", "type": "string"},
+        {"name": "role", "type": "enum", "values": ["admin", "member"]},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_users_email_active",
+          "columns": ["email"],
+          "unique": true,
+          "indexType": "partialUnique",
+          "where": "deletedAt IS NULL",
+          "rationale": "Partial unique: email must be unique among active users. Soft-deleted users release their email for re-registration."
+        },
+        {
+          "name": "idx_users_org_deleted",
+          "columns": ["organisationId", "deletedAt"],
+          "rationale": "Multi-tenant user listing with soft-delete filter"
+        },
+        {
+          "name": "idx_users_org_role",
+          "columns": ["organisationId", "role", "deletedAt"],
+          "rationale": "Listing users by role within an organisation (e.g., find all admins)"
+        }
+      ],
+      "serviceFile": "server/services/users.service.ts"
+    },
+    {
+      "name": "projects",
+      "tenantKey": "direct",
+      "softDeleteColumn": "deletedAt",
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "organisationId", "type": "uuid", "references": "organisations.id"},
+        {"name": "canonicalSchemaId", "type": "uuid", "references": "canonicalSchemas.id"},
+        {"name": "name", "type": "string"},
+        {"name": "description", "type": "text", "nullable": true},
+        {"name": "status", "type": "enum", "values": ["draft", "active", "archived"]},
+        {"name": "deIdentificationConfig", "type": "json", "nullable": true},
+        {"name": "deIdentificationConfigVersion", "type": "integer", "nullable": true},
+        {"name": "filterConfig", "type": "json", "nullable": true},
+        {"name": "filterConfigVersion", "type": "integer", "nullable": true},
+        {"name": "createdByUserId", "type": "uuid", "nullable": true, "references": "users.id"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_projects_org_status",
+          "columns": ["organisationId", "status", "deletedAt"],
+          "rationale": "Multi-tenant project listing filtered by status with soft-delete"
+        },
+        {
+          "name": "idx_projects_org_deleted",
+          "columns": ["organisationId", "deletedAt"],
+          "rationale": "General multi-tenant project listing with soft-delete filter"
+        },
+        {
+          "name": "idx_projects_canonical_schema",
+          "columns": ["canonicalSchemaId", "deletedAt"],
+          "rationale": "FK lookup: projects targeting a specific canonical schema, with soft-delete filter"
+        },
+        {
+          "name": "idx_projects_created_by",
+          "columns": ["createdByUserId", "deletedAt"],
+          "rationale": "Audit lookup: projects created by a specific user, with soft-delete filter"
+        }
+      ],
+      "serviceFile": "server/services/projects.service.ts"
+    },
+    {
+      "name": "sources",
+      "tenantKey": "direct",
+      "softDeleteColumn": "deletedAt",
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "organisationId", "type": "uuid", "references": "organisations.id"},
+        {"name": "name", "type": "string"},
+        {"name": "sourceType", "type": "enum", "values": ["fileUpload", "apiConnector"]},
+        {"name": "status", "type": "enum", "values": ["pending", "ready", "expired", "error"]},
+        {"name": "originalFilename", "type": "string", "nullable": true},
+        {"name": "filePath", "type": "string", "nullable": true},
+        {"name": "mimeType", "type": "string", "nullable": true},
+        {"name": "sizeBytes", "type": "integer", "nullable": true},
+        {"name": "provider", "type": "string", "nullable": true},
+        {"name": "connectionConfig", "type": "json", "nullable": true},
+        {"name": "connectionConfigVersion", "type": "integer", "nullable": true},
+        {"name": "detectedColumns", "type": "json", "nullable": true},
+        {"name": "expiresAt", "type": "timestamp", "nullable": true},
+        {"name": "createdByUserId", "type": "uuid", "nullable": true, "references": "users.id"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_sources_org_status",
+          "columns": ["organisationId", "status", "deletedAt"],
+          "rationale": "Multi-tenant source listing filtered by status with soft-delete"
+        },
+        {
+          "name": "idx_sources_org_deleted",
+          "columns": ["organisationId", "deletedAt"],
+          "rationale": "General multi-tenant source listing with soft-delete filter"
+        },
+        {
+          "name": "idx_sources_expires_at",
+          "columns": ["expiresAt"],
+          "rationale": "Retention cleanup queries: find sources past expiration for 30-day purge"
+        },
+        {
+          "name": "idx_sources_created_by",
+          "columns": ["createdByUserId", "deletedAt"],
+          "rationale": "Audit lookup: sources created by a specific user, with soft-delete filter"
+        }
+      ],
+      "serviceFile": "server/services/sources.service.ts"
+    },
+    {
+      "name": "projectSources",
+      "tenantKey": "indirect",
+      "softDeleteColumn": "deletedAt",
+      "projectScopeStrategy": "projectIdColumn",
+      "requiredFiltering": [
+        "projects.organisationId = :organisationId",
+        "projectSources.projectId = :projectId"
+      ],
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "projectId", "type": "uuid", "references": "projects.id"},
+        {"name": "sourceId", "type": "uuid", "references": "sources.id"},
+        {"name": "mappingConfig", "type": "json"},
+        {"name": "mappingConfigVersion", "type": "integer"},
+        {"name": "filterRules", "type": "json", "nullable": true},
+        {"name": "filterRulesVersion", "type": "integer", "nullable": true},
+        {"name": "createdByUserId", "type": "uuid", "nullable": true, "references": "users.id"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_project_sources_project",
+          "columns": ["projectId", "deletedAt"],
+          "rationale": "List all source links for a project with soft-delete filter"
+        },
+        {
+          "name": "idx_project_sources_source",
+          "columns": ["sourceId", "deletedAt"],
+          "rationale": "FK lookup: find all project links for a given source, with soft-delete filter"
+        },
+        {
+          "name": "idx_project_sources_unique_link",
+          "columns": ["projectId", "sourceId"],
+          "unique": true,
+          "indexType": "partialUnique",
+          "where": "deletedAt IS NULL",
+          "rationale": "Partial unique: prevent duplicate active links between the same project and source"
+        },
+        {
+          "name": "idx_project_sources_created_by",
+          "columns": ["createdByUserId", "deletedAt"],
+          "rationale": "Audit lookup: project-source links created by a specific user, with soft-delete filter"
+        }
+      ],
+      "serviceFile": "server/services/projectSources.service.ts"
+    },
+    {
+      "name": "canonicalSchemas",
+      "tenantKey": "none",
+      "softDeleteColumn": "deletedAt",
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "name", "type": "string"},
+        {"name": "version", "type": "integer"},
+        {"name": "category", "type": "string"},
+        {"name": "description", "type": "text", "nullable": true},
+        {"name": "definition", "type": "json"},
+        {"name": "definitionVersion", "type": "integer"},
+        {"name": "isDefault", "type": "boolean"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "singletonFlags": [
+        {
+          "column": "isDefault",
+          "scope": ["category"],
+          "enforcement": "partialUniqueIndex",
+          "description": "At most one default schema per category among active (non-deleted) records. Service layer sets all others to false before setting one to true within a transaction."
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_schemas_name_version_active",
+          "columns": ["name", "version"],
+          "unique": true,
+          "indexType": "partialUnique",
+          "where": "deletedAt IS NULL",
+          "rationale": "Partial unique: enforce version uniqueness per schema name among active records"
+        },
+        {
+          "name": "idx_schemas_category_default",
+          "columns": ["category", "isDefault", "deletedAt"],
+          "rationale": "Singleton flag index: resolve the active default schema per category efficiently"
+        },
+        {
+          "name": "idx_schemas_category_one_default",
+          "columns": ["category"],
+          "unique": true,
+          "indexType": "partialUnique",
+          "where": "isDefault = true AND deletedAt IS NULL",
+          "rationale": "Partial unique: enforce at most one default schema per category among active records"
+        },
+        {
+          "name": "idx_schemas_deleted",
+          "columns": ["deletedAt"],
+          "rationale": "Soft-delete filter on platform-level schema queries"
+        }
+      ],
+      "serviceFile": "server/services/canonicalSchemas.service.ts"
+    },
+    {
+      "name": "processingJobs",
+      "tenantKey": "indirect",
+      "softDeleteColumn": "deletedAt",
+      "projectScopeStrategy": "projectIdColumn",
+      "requiredFiltering": [
+        "projects.organisationId = :organisationId",
+        "processingJobs.projectId = :projectId"
+      ],
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "projectId", "type": "uuid", "references": "projects.id"},
+        {"name": "status", "type": "enum", "values": ["queued", "processing", "completed", "failed"]},
+        {"name": "triggeredBy", "type": "enum", "values": ["user", "system", "scheduler"]},
+        {"name": "configSnapshot", "type": "json"},
+        {"name": "sourceRecordCount", "type": "integer", "nullable": true},
+        {"name": "errorDetails", "type": "json", "nullable": true},
+        {"name": "startedAt", "type": "timestamp", "nullable": true},
+        {"name": "completedAt", "type": "timestamp", "nullable": true},
+        {"name": "createdByUserId", "type": "uuid", "nullable": true, "references": "users.id"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_jobs_project_status",
+          "columns": ["projectId", "status", "deletedAt"],
+          "rationale": "List jobs for a project filtered by status with soft-delete"
+        },
+        {
+          "name": "idx_jobs_project_deleted",
+          "columns": ["projectId", "deletedAt"],
+          "rationale": "General project job listing with soft-delete filter"
+        },
+        {
+          "name": "idx_jobs_status_started",
+          "columns": ["status", "startedAt", "deletedAt"],
+          "rationale": "Queue management: find queued/processing jobs ordered by start time"
+        },
+        {
+          "name": "idx_jobs_completed_at",
+          "columns": ["completedAt"],
+          "rationale": "Queries for recently completed jobs across the platform"
+        },
+        {
+          "name": "idx_jobs_created_by",
+          "columns": ["createdByUserId", "deletedAt"],
+          "rationale": "Audit lookup: jobs created by a specific user, with soft-delete filter"
+        },
+        {
+          "name": "idx_jobs_triggered_by",
+          "columns": ["triggeredBy", "deletedAt"],
+          "rationale": "Audit lookup: filter jobs by trigger source (user, system, scheduler)"
+        }
+      ],
+      "serviceFile": "server/services/processingJobs.service.ts"
+    },
+    {
+      "name": "datasets",
+      "tenantKey": "indirect",
+      "softDeleteColumn": "deletedAt",
+      "projectScopeStrategy": "projectIdColumn",
+      "requiredFiltering": [
+        "projects.organisationId = :organisationId",
+        "datasets.projectId = :projectId"
+      ],
+      "columns": [
+        {"name": "id", "type": "uuid", "primary": true},
+        {"name": "projectId", "type": "uuid", "references": "projects.id"},
+        {"name": "processingJobId", "type": "uuid", "references": "processingJobs.id"},
+        {"name": "canonicalSchemaId", "type": "uuid", "references": "canonicalSchemas.id"},
+        {"name": "name", "type": "string"},
+        {"name": "version", "type": "integer"},
+        {"name": "format", "type": "enum", "values": ["conversationalJsonl", "qaPairsJson", "rawStructuredJson"]},
+        {"name": "recordCount", "type": "integer"},
+        {"name": "sizeBytes", "type": "integer"},
+        {"name": "filePath", "type": "string"},
+        {"name": "lineage", "type": "json"},
+        {"name": "retentionPolicy", "type": "enum", "values": ["untilDeleted"]},
+        {"name": "createdByUserId", "type": "uuid", "nullable": true, "references": "users.id"},
+        {"name": "createdAt", "type": "timestamp"},
+        {"name": "updatedAt", "type": "timestamp"},
+        {"name": "deletedAt", "type": "timestamp", "nullable": true}
+      ],
+      "indexes": [
+        {
+          "name": "idx_datasets_project_deleted",
+          "columns": ["projectId", "deletedAt"],
+          "rationale": "List datasets for a project with soft-delete filter"
+        },
+        {
+          "name": "idx_datasets_project_name_version_active",
+          "columns": ["projectId", "name", "version"],
+          "unique": true,
+          "indexType": "partialUnique",
+          "where": "deletedAt IS NULL",
+          "rationale": "Partial unique: enforce version uniqueness per dataset name within a project among active records"
+        },
+        {
+          "name": "idx_datasets_processing_job",
+          "columns": ["processingJobId", "deletedAt"],
+          "rationale": "FK lookup: datasets produced by a specific processing job, with soft-delete filter"
+        },
+        {
+          "name": "idx_datasets_canonical_schema",
+          "columns": ["canonicalSchemaId", "deletedAt"],
+          "rationale": "FK lookup: datasets targeting a specific canonical schema, with soft-delete filter"
+        },
+        {
+          "name": "idx_datasets_created_by",
+          "columns": ["createdByUserId", "deletedAt"],
+          "rationale": "Audit lookup: datasets created by a specific user, with soft-delete filter"
+        }
+      ],
+      "serviceFile": "server/services/datasets.service.ts"
+    }
+  ],
+  "softDeleteCascades": [
+    {
+      "parentEntity": "organisations",
+      "cascadeTargets": [
+        {"table": "users", "foreignKey": "organisationId"},
+        {"table": "projects", "foreignKey": "organisationId"},
+        {"table": "sources", "foreignKey": "organisationId"}
+      ],
+      "executionOrder": 1,
+      "note": "Requires projects cascade (order 2) and sources cascade (order 3) to complete before indirect descendants (projectSources, processingJobs, datasets) are reachable."
+    },
+    {
+      "parentEntity": "projects",
+      "cascadeTargets": [
+        {"table": "projectSources", "foreignKey": "projectId"},
+        {"table": "processingJobs", "foreignKey": "projectId"},
+        {"table": "datasets", "foreignKey": "projectId"}
+      ],
+      "executionOrder": 2
+    },
+    {
+      "parentEntity": "sources",
+      "cascadeTargets": [
+        {"table": "projectSources", "foreignKey": "sourceId"}
+      ],
+      "executionOrder": 3
+    },
+    {
+      "parentEntity": "processingJobs",
+      "cascadeTargets": [
+        {"table": "datasets", "foreignKey": "processingJobId"}
+      ],
+      "executionOrder": 4
+    }
+  ],
+  "nonCascadingForeignKeys": [
+    {
+      "table": "projects",
+      "column": "canonicalSchemaId",
+      "references": "canonicalSchemas.id",
+      "reason": "Platform-level resource. Canonical schemas are system-provided and exempt from organisation-level isolation. Deleting a schema does not invalidate projects that referenced it; the project retains its configSnapshot for reproducibility."
+    },
+    {
+      "table": "projects",
+      "column": "createdByUserId",
+      "references": "users.id",
+      "reason": "Nullable audit column. Orphaned records are acceptable when the referenced user is soft-deleted. Project ownership transfers to the organisation, not to a specific user."
+    },
+    {
+      "table": "sources",
+      "column": "createdByUserId",
+      "references": "users.id",
+      "reason": "Nullable audit column. Orphaned records are acceptable when the referenced user is soft-deleted."
+    },
+    {
+      "table": "projectSources",
+      "column": "createdByUserId",
+      "references": "users.id",
+      "reason": "Nullable audit column. Orphaned records are acceptable when the referenced user is soft-deleted."
+    },
+    {
+      "table": "processingJobs",
+      "column": "createdByUserId",
+      "references": "users.id",
+      "reason": "Nullable audit column. Orphaned records are acceptable when the referenced user is soft-deleted."
+    },
+    {
+      "table": "datasets",
+      "column": "canonicalSchemaId",
+      "references": "canonicalSchemas.id",
+      "reason": "Platform-level resource. Canonical schemas are system-provided. Deleting a schema does not invalidate output datasets; the dataset retains lineage and configSnapshot for reproducibility."
+    },
+    {
+      "table": "datasets",
+      "column": "createdByUserId",
+      "references": "users.id",
+      "reason": "Nullable audit column. Orphaned records are acceptable when the referenced user is soft-deleted."
+    }
+  ]
+}

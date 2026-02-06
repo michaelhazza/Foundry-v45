@@ -1,0 +1,485 @@
+{
+  "$schema": "ui-api-deps-v2",
+  "totalPages": 18,
+  "canonicalPaths": {
+    "apiClient": "client/src/lib/api.ts",
+    "errorBoundary": "client/src/lib/ErrorBoundary.tsx",
+    "appComponent": "client/src/App.tsx"
+  },
+  "pages": [
+    {
+      "filePath": "client/src/pages/LoginPage.tsx",
+      "routePath": "/login",
+      "scope": "required",
+      "authenticated": false,
+      "apiCalls": [
+        {
+          "method": "POST",
+          "path": "/api/auth/login",
+          "required": true,
+          "authRequired": false
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/RegisterPage.tsx",
+      "routePath": "/register",
+      "scope": "required",
+      "authenticated": false,
+      "apiCalls": [
+        {
+          "method": "POST",
+          "path": "/api/auth/register",
+          "required": true,
+          "authRequired": false
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/DashboardPage.tsx",
+      "routePath": "/dashboard",
+      "scope": "required",
+      "authenticated": true,
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/projects",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit", "status"]
+        },
+        {
+          "method": "GET",
+          "path": "/api/sources",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/ProjectsPage.tsx",
+      "routePath": "/projects",
+      "scope": "required",
+      "authenticated": true,
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/projects",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit", "status"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/projects",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/canonical-schemas",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/ProjectDetailPage.tsx",
+      "routePath": "/projects/:projectId",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "manage-projects capability: full project lifecycle. Hub page with tabs for sources, processing jobs, and datasets. No real-time polling for job status per performanceIntent.noRealTimeGuarantees; user manually refreshes.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/projects/:projectId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/projects/:projectId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/sources",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/projects/:projectId/sources",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/sources",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        },
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/processing-jobs",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/projects/:projectId/processing-jobs",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/datasets",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/ProjectSourceDetailPage.tsx",
+      "routePath": "/projects/:projectId/sources/:projectSourceId",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "Source-to-schema mapping configuration page. Displays detected columns from the source alongside canonical schema fields for mapping. Schema context loaded via project's canonicalSchemaId.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/sources/:projectSourceId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/projects/:projectId/sources/:projectSourceId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/projects/:projectId/sources/:projectSourceId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/canonical-schemas/:schemaId",
+          "required": true,
+          "authRequired": true,
+          "dependsOn": "/api/projects/:projectId"
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/ProcessingJobDetailPage.tsx",
+      "routePath": "/projects/:projectId/processing-jobs/:jobId",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "Displays job status, config snapshot, error details (if failed), and timing. No real-time polling per performanceIntent.noRealTimeGuarantees; user manually refreshes to check status.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/processing-jobs/:jobId",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/DatasetDetailPage.tsx",
+      "routePath": "/projects/:projectId/datasets/:datasetId",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "export-datasets capability: dataset metadata view and download-only export. Supported output formats: Conversational JSONL, Q&A Pairs JSON, Raw Structured JSON.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/datasets/:datasetId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/projects/:projectId/datasets/:datasetId/download",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/projects/:projectId/datasets/:datasetId",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/SourcesPage.tsx",
+      "routePath": "/sources",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "manage-sources capability: organisation-level source library. File upload supports CSV, Excel, JSON (max 50MB). Sources are org-scoped, not project-scoped.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/sources",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/sources/upload",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/SourceDetailPage.tsx",
+      "routePath": "/sources/:sourceId",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "Source metadata view including detected columns, file info, status, and expiry. Status badges: pending, ready, expired, error.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/sources/:sourceId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/sources/:sourceId",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/SettingsPage.tsx",
+      "routePath": "/settings",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "manage-organisation capability served here via GET/PATCH /api/organisation. Tenant container management (settingsEmbedded strategy). Organisation profile editable: rename and view details per scope manifest allowedMutations.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/organisation",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/organisation",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/UsersPage.tsx",
+      "routePath": "/users",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "manage-users and invite-users capabilities served here. Admin-only invite via POST. Lists organisation members with role badges.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/users",
+          "required": true,
+          "authRequired": true,
+          "queryParams": ["page", "limit"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/users",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/UserDetailPage.tsx",
+      "routePath": "/users/:userId",
+      "scope": "required",
+      "authenticated": true,
+      "notes": "User profile view and admin-only management. Non-admin users can view their own profile via this page. Admin users can change roles and remove members.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/users/:userId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/users/:userId",
+          "required": true,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/users/:userId",
+          "required": true,
+          "authRequired": true
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/WebhooksPage.tsx",
+      "routePath": "/webhooks",
+      "scope": "deferred",
+      "authenticated": true,
+      "notes": "Phase 2: Automation triggers and event notifications. When enabled, GET and POST become required; DELETE becomes required for webhook management.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/webhooks",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "POST",
+          "path": "/api/webhooks",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/webhooks/:id",
+          "required": false,
+          "authRequired": true,
+          "dependsOn": "/api/webhooks"
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/BillingPage.tsx",
+      "routePath": "/billing",
+      "scope": "deferred",
+      "authenticated": true,
+      "notes": "Phase 2: Usage-based billing and subscription management. When enabled, GET becomes required for billing overview; POST and PATCH become required for plan management.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/billing",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "POST",
+          "path": "/api/billing",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/billing/:id",
+          "required": false,
+          "authRequired": true,
+          "dependsOn": "/api/billing"
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/ConnectorMarketplacePage.tsx",
+      "routePath": "/marketplace",
+      "scope": "deferred",
+      "authenticated": true,
+      "notes": "Phase 2: Connector and schema marketplace for community templates. When enabled, list GET becomes required; detail GET becomes required for item preview.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/marketplace",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/marketplace/:id",
+          "required": false,
+          "authRequired": true,
+          "dependsOn": "/api/marketplace"
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/CloudStorageDestinationsPage.tsx",
+      "routePath": "/export-destinations",
+      "scope": "deferred",
+      "authenticated": true,
+      "notes": "Phase 2: Push-to-destination export to cloud storage. When enabled, GET and POST become required; DELETE becomes required for destination removal.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/cloud-storage-destinations",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "POST",
+          "path": "/api/cloud-storage-destinations",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/cloud-storage-destinations/:id",
+          "required": false,
+          "authRequired": true,
+          "dependsOn": "/api/cloud-storage-destinations"
+        }
+      ]
+    },
+    {
+      "filePath": "client/src/pages/EnrichmentPluginsPage.tsx",
+      "routePath": "/enrichment-plugins",
+      "scope": "deferred",
+      "authenticated": true,
+      "notes": "Phase 2: Advanced enrichment and classification pipeline plugins. When enabled, GET and POST become required; DELETE becomes required for plugin removal.",
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/enrichment-plugins",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "POST",
+          "path": "/api/enrichment-plugins",
+          "required": false,
+          "authRequired": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/enrichment-plugins/:id",
+          "required": false,
+          "authRequired": true,
+          "dependsOn": "/api/enrichment-plugins"
+        }
+      ]
+    }
+  ]
+}

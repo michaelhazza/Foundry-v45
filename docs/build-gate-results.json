@@ -1,0 +1,13 @@
+{
+  "$schema": "build-gate-results-v1",
+  "buildId": "GENERATED_AT_RUNTIME",
+  "startTime": "GENERATED_AT_RUNTIME",
+  "endTime": "GENERATED_AT_RUNTIME",
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0
+  },
+  "gates": [],
+  "_note": "This is a template. Actual results are written by scripts/run-all-gates.sh"
+}

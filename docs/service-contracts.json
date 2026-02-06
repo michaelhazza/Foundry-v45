@@ -1,0 +1,1486 @@
+{
+  "$schema": "service-contracts-v2",
+  "routeConvention": "tokenScoped",
+  "paginationStrategy": "rootInheritance",
+  "deferredRouteHandling": "excludeFromRegistration",
+  "pagination": {
+    "maxPageSize": 100,
+    "defaultPageSize": 20,
+    "enforcement": "clamp"
+  },
+  "endpointExclusions": [],
+  "statusEnums": [
+    {
+      "name": "projects",
+      "statusField": "status",
+      "allowedValues": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "transitions": [
+        {
+          "from": "draft",
+          "to": [
+            "active"
+          ]
+        },
+        {
+          "from": "active",
+          "to": [
+            "archived"
+          ]
+        },
+        {
+          "from": "archived",
+          "to": [
+            "active"
+          ]
+        }
+      ],
+      "semantics": {
+        "draft": "Project created but no successful processing yet",
+        "active": "At least one processing job completed successfully",
+        "archived": "User archived the project"
+      }
+    },
+    {
+      "name": "sources",
+      "statusField": "status",
+      "allowedValues": [
+        "pending",
+        "ready",
+        "expired",
+        "error"
+      ],
+      "transitions": [
+        {
+          "from": "pending",
+          "to": [
+            "ready",
+            "error"
+          ]
+        },
+        {
+          "from": "error",
+          "to": [
+            "pending"
+          ]
+        },
+        {
+          "from": "ready",
+          "to": [
+            "expired"
+          ]
+        }
+      ],
+      "semantics": {
+        "pending": "Data ingestion in progress",
+        "ready": "Data ingested and available for processing",
+        "expired": "30-day retention exceeded, data purged",
+        "error": "Data ingestion failed"
+      }
+    },
+    {
+      "name": "processingJobs",
+      "statusField": "status",
+      "allowedValues": [
+        "queued",
+        "processing",
+        "completed",
+        "failed"
+      ],
+      "transitions": [
+        {
+          "from": "queued",
+          "to": [
+            "processing"
+          ]
+        },
+        {
+          "from": "processing",
+          "to": [
+            "completed",
+            "failed"
+          ]
+        }
+      ],
+      "semantics": {
+        "queued": "Job created, waiting for processing engine",
+        "processing": "Processing engine executing pipeline stages",
+        "completed": "All pipeline stages succeeded, dataset produced",
+        "failed": "Pipeline stage failed, no dataset produced"
+      }
+    }
+  ],
+  "endpoints": [
+    {
+      "path": "/health",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/health.routes.ts",
+      "middleware": [],
+      "authentication": "public",
+      "serviceContract": {
+        "serviceFile": "server/services/health.service.ts",
+        "methodName": "getHealthStatus",
+        "signature": "getHealthStatus()",
+        "routeArgs": [],
+        "purpose": "healthCheck",
+        "authRequired": false,
+        "rbac": null,
+        "fileUpload": false,
+        "notes": "Infrastructure health check. Returns server status and database connectivity."
+      }
+    },
+    {
+      "path": "/api/auth/register",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/auth.routes.ts",
+      "middleware": [
+        "validateBody"
+      ],
+      "authentication": "public",
+      "serviceContract": {
+        "serviceFile": "server/services/auth.service.ts",
+        "methodName": "register",
+        "signature": "register(email, password, name, organisationName)",
+        "routeArgs": [
+          "req.body.email",
+          "req.body.password",
+          "req.body.name",
+          "req.body.organisationName"
+        ],
+        "purpose": "register",
+        "authRequired": false,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "sideEffects": [
+          "Creates a new organisation record with the provided organisationName",
+          "Creates a user with role admin in the new organisation"
+        ],
+        "notes": "Self-registration creates both organisation and first admin user in a single transaction. Validation: email must be unique among active users (partial unique index on users.email WHERE deletedAt IS NULL), password minimum 8 characters. Enum validation: role is server-assigned as admin, not user-provided."
+      }
+    },
+    {
+      "path": "/api/auth/login",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/auth.routes.ts",
+      "middleware": [
+        "validateBody"
+      ],
+      "authentication": "public",
+      "responseTokenPath": ".accessToken",
+      "serviceContract": {
+        "serviceFile": "server/services/auth.service.ts",
+        "methodName": "login",
+        "signature": "login(email, password)",
+        "routeArgs": [
+          "req.body.email",
+          "req.body.password"
+        ],
+        "purpose": "login",
+        "authRequired": false,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "notes": "Returns accessToken and refreshToken. Response includes user object with id, email, role, and organisationId."
+      }
+    },
+    {
+      "path": "/api/organisation",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/organisation.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/organisations.service.ts",
+        "methodName": "getOrganisation",
+        "signature": "getOrganisation(organisationId)",
+        "routeArgs": [
+          "req.user.organisationId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getOrganisation",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: organisation derived from authenticated user's token claims. Tenant container GET endpoint for settingsEmbedded uiStrategy."
+      }
+    },
+    {
+      "path": "/api/organisation",
+      "method": "PATCH",
+      "status": "required",
+      "routeFile": "server/routes/organisation.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/organisations.service.ts",
+        "methodName": "updateOrganisation",
+        "signature": "updateOrganisation(organisationId, name)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.body.name"
+        ],
+        "mustUseAuth": true,
+        "purpose": "updateOrganisation",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "update",
+        "notes": "Token-scoped: organisation derived from authenticated user's token claims. Tenant container PATCH endpoint for settingsEmbedded uiStrategy. Allowed mutations: rename, viewDetails per scope manifest."
+      }
+    },
+    {
+      "path": "/api/users",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/users.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/users.service.ts",
+        "methodName": "listUsers",
+        "signature": "listUsers(organisationId, page, limit)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listUsers",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: lists users within the authenticated user's organisation. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/users",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/users.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/users.service.ts",
+        "methodName": "inviteUser",
+        "signature": "inviteUser(organisationId, email, role)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.body.email",
+          "req.body.role"
+        ],
+        "mustUseAuth": true,
+        "purpose": "inviteUser",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "notes": "Invite-only onboarding per scope manifest. Admin creates user account in their organisation. Enum validation: role must be z.enum(['admin', 'member']) matching users.role database enum. Email must be unique among active users (partial unique index)."
+      }
+    },
+    {
+      "path": "/api/users/:userId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/users.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/users.service.ts",
+        "methodName": "getUser",
+        "signature": "getUser(organisationId, userId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.userId"
+        ],
+        "mustUseParams": [
+          "userId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getUser",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: user must belong to the authenticated user's organisation. Service layer filters by organisationId to prevent cross-tenant access."
+      }
+    },
+    {
+      "path": "/api/users/:userId",
+      "method": "PATCH",
+      "status": "required",
+      "routeFile": "server/routes/users.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/users.service.ts",
+        "methodName": "updateUser",
+        "signature": "updateUser(organisationId, userId, role)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.userId",
+          "req.body.role"
+        ],
+        "mustUseParams": [
+          "userId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "updateUser",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "update",
+        "notes": "Admin-only role change. Enum validation: role must be z.enum(['admin', 'member']) matching users.role database enum. Service layer verifies target user belongs to the same organisation."
+      }
+    },
+    {
+      "path": "/api/users/:userId",
+      "method": "DELETE",
+      "status": "required",
+      "routeFile": "server/routes/users.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/users.service.ts",
+        "methodName": "deleteUser",
+        "signature": "deleteUser(organisationId, userId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.userId"
+        ],
+        "mustUseParams": [
+          "userId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "deleteUser",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Soft delete. Sets deletedAt on the user record. Non-cascading: projects, sources, projectSources, processingJobs, and datasets created by this user retain their createdByUserId as orphaned audit references per data model nonCascadingForeignKeys. Admin cannot delete themselves."
+      }
+    },
+    {
+      "path": "/api/projects",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/projects.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projects.service.ts",
+        "methodName": "listProjects",
+        "signature": "listProjects(organisationId, page, limit)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listProjects",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: lists projects within the authenticated user's organisation. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/projects",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/projects.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projects.service.ts",
+        "methodName": "createProject",
+        "signature": "createProject(organisationId, userId, name, description, canonicalSchemaId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.user.id",
+          "req.body.name",
+          "req.body.description",
+          "req.body.canonicalSchemaId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "createProject",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "notes": "Creates project in draft status. canonicalSchemaId is required (non-nullable FK per data model). description is optional (nullable column). createdByUserId set server-side from req.user.id. deIdentificationConfig and filterConfig start as null (deferred configuration). Enum validation: status is server-assigned as draft, not user-provided."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/projects.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projects.service.ts",
+        "methodName": "getProject",
+        "signature": "getProject(organisationId, projectId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getProject",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read"
+      }
+    },
+    {
+      "path": "/api/projects/:projectId",
+      "method": "PATCH",
+      "status": "required",
+      "routeFile": "server/routes/projects.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projects.service.ts",
+        "methodName": "updateProject",
+        "signature": "updateProject(organisationId, projectId, updates)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.body"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "updateProject",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "update",
+        "notes": "Updatable fields: name, description, canonicalSchemaId, deIdentificationConfig, filterConfig, status. Version-bump invariant: changing deIdentificationConfig MUST increment deIdentificationConfigVersion in the same transaction. Changing filterConfig MUST increment filterConfigVersion in the same transaction. Persisted to projects.deIdentificationConfig, projects.deIdentificationConfigVersion, projects.filterConfig, projects.filterConfigVersion respectively. Enum validation: status must be z.enum(['draft', 'active', 'archived']) with state transition enforcement per statusEnums."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId",
+      "method": "DELETE",
+      "status": "required",
+      "routeFile": "server/routes/projects.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projects.service.ts",
+        "methodName": "deleteProject",
+        "signature": "deleteProject(organisationId, projectId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "deleteProject",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Soft delete. Cascades soft-delete to projectSources, processingJobs, and datasets per softDeleteCascades (executionOrder 2)."
+      }
+    },
+    {
+      "path": "/api/sources",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/sources.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/sources.service.ts",
+        "methodName": "listSources",
+        "signature": "listSources(organisationId, page, limit)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listSources",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: lists sources within the authenticated user's organisation. Sources are org-level (tenantKey: direct), not project-scoped. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/sources/upload",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/sources.routes.ts",
+      "middleware": [
+        "authenticate",
+        "multerUpload",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "allowedMimeTypes": [
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/json"
+      ],
+      "maxSizeMb": 50,
+      "configSource": "MAX_FILE_SIZE_BYTES default 52428800",
+      "serviceContract": {
+        "serviceFile": "server/services/sources.service.ts",
+        "methodName": "uploadSource",
+        "signature": "uploadSource(organisationId, userId, file, name)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.user.id",
+          "req.file",
+          "req.body.name"
+        ],
+        "mustUseAuth": true,
+        "purpose": "uploadSource",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": true,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "notes": "File upload source creation. sourceType server-assigned as fileUpload. status starts as pending. Automatic column detection on ingestion populates detectedColumns. expiresAt set to 30 days from upload per retention policy. createdByUserId set server-side from req.user.id. Supported formats: CSV, Excel, JSON per platformConstraints.supportedInputFormats. File metadata (originalFilename, filePath, mimeType, sizeBytes) extracted from req.file. Persisted to sources table columns: name, sourceType, originalFilename, filePath, mimeType, sizeBytes."
+      }
+    },
+    {
+      "path": "/api/sources/:sourceId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/sources.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/sources.service.ts",
+        "methodName": "getSource",
+        "signature": "getSource(organisationId, sourceId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.sourceId"
+        ],
+        "mustUseParams": [
+          "sourceId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getSource",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: service layer filters by organisationId to prevent cross-tenant access."
+      }
+    },
+    {
+      "path": "/api/sources/:sourceId",
+      "method": "DELETE",
+      "status": "required",
+      "routeFile": "server/routes/sources.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/sources.service.ts",
+        "methodName": "deleteSource",
+        "signature": "deleteSource(organisationId, sourceId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.sourceId"
+        ],
+        "mustUseParams": [
+          "sourceId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "deleteSource",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Soft delete. Cascades soft-delete to projectSources linked to this source per softDeleteCascades (executionOrder 3)."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/sources",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/projectSources.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projectSources.service.ts",
+        "methodName": "listProjectSources",
+        "signature": "listProjectSources(organisationId, projectId, page, limit)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listProjectSources",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Project-scoped (indirect tenant). Service layer joins through projects.organisationId for tenant isolation. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/sources",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/projectSources.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projectSources.service.ts",
+        "methodName": "linkSourceToProject",
+        "signature": "linkSourceToProject(organisationId, projectId, userId, sourceId, mappingConfig)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.user.id",
+          "req.body.sourceId",
+          "req.body.mappingConfig"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "linkSourceToProject",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "notes": "Links an existing source to a project with project-specific mapping configuration. sourceId is required (non-nullable FK). mappingConfig is required (non-nullable column per data model). filterRules is optional (nullable column) - omitted from initial link, configured later via PATCH. mappingConfigVersion initialised to 1. createdByUserId set server-side from req.user.id. Partial unique constraint: projectId + sourceId must be unique among active records. Persisted to projectSources.mappingConfig."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/sources/:projectSourceId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/projectSources.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projectSources.service.ts",
+        "methodName": "getProjectSource",
+        "signature": "getProjectSource(organisationId, projectId, projectSourceId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.projectSourceId"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "projectSourceId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getProjectSource",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read"
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/sources/:projectSourceId",
+      "method": "PATCH",
+      "status": "required",
+      "routeFile": "server/routes/projectSources.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projectSources.service.ts",
+        "methodName": "updateProjectSource",
+        "signature": "updateProjectSource(organisationId, projectId, projectSourceId, updates)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.projectSourceId",
+          "req.body"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "projectSourceId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "updateProjectSource",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "update",
+        "notes": "Updatable fields: mappingConfig, filterRules. Version-bump invariant: changing mappingConfig MUST increment mappingConfigVersion in the same transaction. Changing filterRules MUST increment filterRulesVersion in the same transaction. Persisted to projectSources.mappingConfig, projectSources.mappingConfigVersion, projectSources.filterRules, projectSources.filterRulesVersion respectively."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/sources/:projectSourceId",
+      "method": "DELETE",
+      "status": "required",
+      "routeFile": "server/routes/projectSources.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/projectSources.service.ts",
+        "methodName": "unlinkSource",
+        "signature": "unlinkSource(organisationId, projectId, projectSourceId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.projectSourceId"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "projectSourceId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "unlinkSource",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Soft delete. Removes project-source link. Does not delete the underlying source."
+      }
+    },
+    {
+      "path": "/api/canonical-schemas",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/canonicalSchemas.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/canonicalSchemas.service.ts",
+        "methodName": "listCanonicalSchemas",
+        "signature": "listCanonicalSchemas(page, limit)",
+        "routeArgs": [
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listCanonicalSchemas",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Platform-level resource: canonical schemas are exempt from organisation-level isolation per scope manifest. System-provided in MVP, not user-created or user-editable. No organisationId filter applied. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/canonical-schemas/:schemaId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/canonicalSchemas.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/canonicalSchemas.service.ts",
+        "methodName": "getCanonicalSchema",
+        "signature": "getCanonicalSchema(schemaId)",
+        "routeArgs": [
+          "req.params.schemaId"
+        ],
+        "mustUseParams": [
+          "schemaId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getCanonicalSchema",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Platform-level resource: canonical schemas are exempt from organisation-level isolation. No organisationId filter applied."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/processing-jobs",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/processingJobs.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/processingJobs.service.ts",
+        "methodName": "listProcessingJobs",
+        "signature": "listProcessingJobs(organisationId, projectId, page, limit)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listProcessingJobs",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Project-scoped (indirect tenant). Service layer joins through projects.organisationId for tenant isolation. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/processing-jobs",
+      "method": "POST",
+      "status": "required",
+      "routeFile": "server/routes/processingJobs.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/processingJobs.service.ts",
+        "methodName": "createProcessingJob",
+        "signature": "createProcessingJob(organisationId, projectId, userId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.user.id"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "createProcessingJob",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": false,
+        "crudOperation": "create",
+        "notes": "Action trigger: no request body. Creates a queued processing job. All parameters derived from path and auth token. Status starts as queued. triggeredBy set to user. createdByUserId set server-side from req.user.id. Config snapshot captures current project-level settings at creation time: project.deIdentificationConfig, project.deIdentificationConfigVersion, project.filterConfig, project.filterConfigVersion, project.canonicalSchemaId, and all linked projectSources mappingConfig and mappingConfigVersion values. Persisted to processingJobs.configSnapshot. Service must validate: source record count does not exceed 100,000 (reject with 400 if exceeded per platformConstraints.limits). Service must validate: project has at least one linked projectSource."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/processing-jobs/:jobId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/processingJobs.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/processingJobs.service.ts",
+        "methodName": "getProcessingJob",
+        "signature": "getProcessingJob(organisationId, projectId, jobId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.jobId"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "jobId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getProcessingJob",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Returns job details including status, configSnapshot, errorDetails (if failed), startedAt, completedAt."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/datasets",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/datasets.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/datasets.service.ts",
+        "methodName": "listDatasets",
+        "signature": "listDatasets(organisationId, projectId, page, limit)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "mustUseParams": [
+          "projectId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "listDatasets",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Project-scoped (indirect tenant). Service layer joins through projects.organisationId for tenant isolation. Pagination inherited from root."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/datasets/:datasetId",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/datasets.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/datasets.service.ts",
+        "methodName": "getDataset",
+        "signature": "getDataset(organisationId, projectId, datasetId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.datasetId"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "datasetId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "getDataset",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Returns dataset metadata including name, version, format, recordCount, sizeBytes, lineage, and processingJobId."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/datasets/:datasetId/download",
+      "method": "GET",
+      "status": "required",
+      "routeFile": "server/routes/datasets.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/datasets.service.ts",
+        "methodName": "downloadDataset",
+        "signature": "downloadDataset(organisationId, projectId, datasetId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.datasetId"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "datasetId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "downloadDataset",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "notes": "Download-only export per scope manifest exportMethod. Returns file stream with Content-Disposition header. Supported output formats: Conversational JSONL, Q&A Pairs JSON, Raw Structured JSON per platformConstraints.supportedOutputFormats."
+      }
+    },
+    {
+      "path": "/api/projects/:projectId/datasets/:datasetId",
+      "method": "DELETE",
+      "status": "required",
+      "routeFile": "server/routes/datasets.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateProjectAccess"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/datasets.service.ts",
+        "methodName": "deleteDataset",
+        "signature": "deleteDataset(organisationId, projectId, datasetId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.projectId",
+          "req.params.datasetId"
+        ],
+        "mustUseParams": [
+          "projectId",
+          "datasetId"
+        ],
+        "mustUseAuth": true,
+        "purpose": "deleteDataset",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Soft delete. Retained until user explicitly deletes per scope manifest. No cascade targets from datasets."
+      }
+    },
+    {
+      "path": "/api/webhooks",
+      "method": "POST",
+      "status": "deferred",
+      "routeFile": "server/routes/webhooks.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/webhooks.service.ts",
+        "methodName": "createWebhook",
+        "signature": "createWebhook(organisationId, url, events)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.body.url",
+          "req.body.events"
+        ],
+        "purpose": "createWebhook",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/webhooks",
+      "method": "GET",
+      "status": "deferred",
+      "routeFile": "server/routes/webhooks.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/webhooks.service.ts",
+        "methodName": "listWebhooks",
+        "signature": "listWebhooks(organisationId)",
+        "routeArgs": [
+          "req.user.organisationId"
+        ],
+        "purpose": "listWebhooks",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: organisation derived from auth token.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/webhooks/:id",
+      "method": "DELETE",
+      "status": "deferred",
+      "routeFile": "server/routes/webhooks.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/webhooks.service.ts",
+        "methodName": "deleteWebhook",
+        "signature": "deleteWebhook(organisationId, webhookId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.id"
+        ],
+        "purpose": "deleteWebhook",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/billing",
+      "method": "GET",
+      "status": "deferred",
+      "routeFile": "server/routes/billingAccounts.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/billingAccounts.service.ts",
+        "methodName": "getBilling",
+        "signature": "getBilling(organisationId)",
+        "routeArgs": [
+          "req.user.organisationId"
+        ],
+        "purpose": "getBilling",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: organisation derived from auth token.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/billing",
+      "method": "POST",
+      "status": "deferred",
+      "routeFile": "server/routes/billingAccounts.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/billingAccounts.service.ts",
+        "methodName": "createBilling",
+        "signature": "createBilling(organisationId, plan)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.body.plan"
+        ],
+        "purpose": "createBilling",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/billing/:id",
+      "method": "PATCH",
+      "status": "deferred",
+      "routeFile": "server/routes/billingAccounts.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/billingAccounts.service.ts",
+        "methodName": "updateBilling",
+        "signature": "updateBilling(organisationId, billingId, plan)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.id",
+          "req.body.plan"
+        ],
+        "purpose": "updateBilling",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "update",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/marketplace",
+      "method": "GET",
+      "status": "deferred",
+      "routeFile": "server/routes/connectorMarketplace.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/connectorMarketplace.service.ts",
+        "methodName": "listMarketplaceItems",
+        "signature": "listMarketplaceItems(page, limit)",
+        "routeArgs": [
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "purpose": "listMarketplaceItems",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Platform-level resource. No organisation filter.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/marketplace/:id",
+      "method": "GET",
+      "status": "deferred",
+      "routeFile": "server/routes/connectorMarketplace.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/connectorMarketplace.service.ts",
+        "methodName": "getMarketplaceItem",
+        "signature": "getMarketplaceItem(itemId)",
+        "routeArgs": [
+          "req.params.id"
+        ],
+        "purpose": "getMarketplaceItem",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Platform-level resource. No organisation filter.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/cloud-storage-destinations",
+      "method": "POST",
+      "status": "deferred",
+      "routeFile": "server/routes/cloudStorageDestinations.routes.ts",
+      "middleware": [
+        "authenticate",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/cloudStorageDestinations.service.ts",
+        "methodName": "createDestination",
+        "signature": "createDestination(organisationId, config)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.body"
+        ],
+        "purpose": "createDestination",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "notes": "Token-scoped: organisation derived from auth token.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/cloud-storage-destinations",
+      "method": "GET",
+      "status": "deferred",
+      "routeFile": "server/routes/cloudStorageDestinations.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/cloudStorageDestinations.service.ts",
+        "methodName": "listDestinations",
+        "signature": "listDestinations(organisationId)",
+        "routeArgs": [
+          "req.user.organisationId"
+        ],
+        "purpose": "listDestinations",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Token-scoped: organisation derived from auth token.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/cloud-storage-destinations/:id",
+      "method": "DELETE",
+      "status": "deferred",
+      "routeFile": "server/routes/cloudStorageDestinations.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/cloudStorageDestinations.service.ts",
+        "methodName": "deleteDestination",
+        "signature": "deleteDestination(organisationId, destinationId)",
+        "routeArgs": [
+          "req.user.organisationId",
+          "req.params.id"
+        ],
+        "purpose": "deleteDestination",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Token-scoped: organisation derived from auth token.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/enrichment-plugins",
+      "method": "GET",
+      "status": "deferred",
+      "routeFile": "server/routes/enrichmentPlugins.routes.ts",
+      "middleware": [
+        "authenticate"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/enrichmentPlugins.service.ts",
+        "methodName": "listPlugins",
+        "signature": "listPlugins(page, limit)",
+        "routeArgs": [
+          "req.query.page",
+          "req.query.limit"
+        ],
+        "purpose": "listPlugins",
+        "authRequired": true,
+        "rbac": null,
+        "fileUpload": false,
+        "crudOperation": "read",
+        "notes": "Platform-level resource. No organisation filter.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/enrichment-plugins",
+      "method": "POST",
+      "status": "deferred",
+      "routeFile": "server/routes/enrichmentPlugins.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole",
+        "validateBody"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/enrichmentPlugins.service.ts",
+        "methodName": "createPlugin",
+        "signature": "createPlugin(name, config)",
+        "routeArgs": [
+          "req.body.name",
+          "req.body.config"
+        ],
+        "purpose": "createPlugin",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "acceptsBody": true,
+        "crudOperation": "create",
+        "notes": "Platform-level resource. Admin-only creation.",
+        "mustUseAuth": true
+      }
+    },
+    {
+      "path": "/api/enrichment-plugins/:id",
+      "method": "DELETE",
+      "status": "deferred",
+      "routeFile": "server/routes/enrichmentPlugins.routes.ts",
+      "middleware": [
+        "authenticate",
+        "requireRole"
+      ],
+      "authentication": "required",
+      "serviceContract": {
+        "serviceFile": "server/services/enrichmentPlugins.service.ts",
+        "methodName": "deletePlugin",
+        "signature": "deletePlugin(pluginId)",
+        "routeArgs": [
+          "req.params.id"
+        ],
+        "purpose": "deletePlugin",
+        "authRequired": true,
+        "rbac": "admin",
+        "fileUpload": false,
+        "crudOperation": "delete",
+        "notes": "Platform-level resource. Admin-only deletion.",
+        "mustUseAuth": true
+      }
+    }
+  ]
+}
