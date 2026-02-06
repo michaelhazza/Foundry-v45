@@ -1,8 +1,8 @@
-export { organisations } from './organisations.js';
-export { users, userRoleEnum } from './users.js';
-export { projects, projectStatusEnum } from './projects.js';
-export { sources, sourceTypeEnum, sourceStatusEnum } from './sources.js';
-export { projectSources } from './projectSources.js';
-export { canonicalSchemas } from './canonicalSchemas.js';
-export { processingJobs, jobStatusEnum, triggeredByEnum } from './processingJobs.js';
-export { datasets, datasetFormatEnum, retentionPolicyEnum } from './datasets.js';
+export { organisations } from './organisations';
+export { users, userRoleEnum } from './users';
+export { projects, projectStatusEnum } from './projects';
+export { sources, sourceTypeEnum, sourceStatusEnum } from './sources';
+export { projectSources } from './projectSources';
+export { canonicalSchemas } from './canonicalSchemas';
+export { processingJobs, jobStatusEnum, triggeredByEnum } from './processingJobs';
+export { datasets, datasetFormatEnum, retentionPolicyEnum } from './datasets';

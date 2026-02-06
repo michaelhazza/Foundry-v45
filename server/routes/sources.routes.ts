@@ -8,7 +8,7 @@ import * as sourcesService from '../services/sources.service.js';
 const router = Router();
 
 const uploadSourceSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).optional(),
 });
 
 router.get('/api/sources', authenticate, async (req, res) => {
@@ -30,11 +30,12 @@ router.post('/api/sources/upload', authenticate, multerUpload, validateBody(uplo
       res.status(400).json({ error: 'File is required' });
       return;
     }
+    const name = req.body.name || req.file.originalname;
     const source = await sourcesService.uploadSource(
       req.user!.organisationId,
       req.user!.id,
       req.file,
-      req.body.name
+      name
     );
     res.status(201).json(source);
   } catch (err: any) {

@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { organisations } from './organisations.js';
+import { organisations } from './organisations';
 
 export const userRoleEnum = ['admin', 'member'] as const;
 

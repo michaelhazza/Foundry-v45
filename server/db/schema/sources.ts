@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, json, index } from 'drizzle-orm/pg-core';
-import { organisations } from './organisations.js';
+import { organisations } from './organisations';
 
 export const sourceTypeEnum = ['fileUpload', 'apiConnector'] as const;
 export const sourceStatusEnum = ['pending', 'ready', 'expired', 'error'] as const;

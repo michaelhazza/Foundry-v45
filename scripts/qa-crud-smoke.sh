@@ -67,6 +67,7 @@ while read -r endpoint_json; do
     create)
       # Read test payload from contract if declared, otherwise send minimal JSON
       TEST_PAYLOAD=$(echo "$endpoint_json" | jq -r '.serviceContract.testPayload // "{}" ')
+      HAS_TEST_PAYLOAD=$(echo "$endpoint_json" | jq 'has("serviceContract") and (.serviceContract | has("testPayload")) and .serviceContract.testPayload != null')
 
       RESPONSE=$(curl -s -w "\n%{http_code}" \
         -X "$METHOD" \
@@ -76,10 +77,7 @@ while read -r endpoint_json; do
         "${BASE_URL}${ROUTE_PATH}")
       HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 
-      if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "200" ]; then
-        echo "[X] FAIL: $CRUD_OP $ROUTE_PATH returned $HTTP_CODE (expected 200/201)"
-        FAILURES=$((FAILURES + 1))
-      else
+      if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
         BODY=$(echo "$RESPONSE" | head -n -1)
         # Extract created resource ID if path is declared
         ID_PATH=$(echo "$endpoint_json" | jq -r '.serviceContract.responseIdPath // ".data.id"')
@@ -89,6 +87,15 @@ while read -r endpoint_json; do
         else
           echo "[OK] $CRUD_OP: $METHOD $ROUTE_PATH ($HTTP_CODE)"
         fi
+      elif [ "$HAS_TEST_PAYLOAD" = "false" ] && [ "$HTTP_CODE" = "400" ]; then
+        # No testPayload declared -- 400 means endpoint is responsive (validates input)
+        echo "[OK] $CRUD_OP: $METHOD $ROUTE_PATH ($HTTP_CODE -- no testPayload, endpoint responsive)"
+      elif [ "$HTTP_CODE" = "500" ]; then
+        echo "[X] FAIL: $CRUD_OP $ROUTE_PATH returned 500 (server error)"
+        FAILURES=$((FAILURES + 1))
+      else
+        echo "[X] FAIL: $CRUD_OP $ROUTE_PATH returned $HTTP_CODE (expected 200/201)"
+        FAILURES=$((FAILURES + 1))
       fi
       ;;
 

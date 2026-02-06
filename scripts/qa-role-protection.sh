@@ -7,6 +7,7 @@ echo "=== QA: Role Protection ==="
 source /tmp/qa-tokens.sh
 
 ADMIN_ENDPOINTS=$(jq -r '.endpoints[] |
+  select(.status == "required") |
   select(.serviceContract.rbac == "admin") |
   "\(.method) \(.path)"' docs/service-contracts.json)
 

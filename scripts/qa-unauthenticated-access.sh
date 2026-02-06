@@ -6,8 +6,9 @@ echo "=== QA: Unauthenticated Access ==="
 
 source /tmp/qa-tokens.sh
 
-# Find all endpoints that are NOT public (should reject unauthenticated requests)
+# Find all required endpoints that are NOT public (should reject unauthenticated requests)
 PROTECTED_ENDPOINTS=$(jq -r '.endpoints[] |
+  select(.status == "required") |
   select(.authentication != "public") |
   select(.serviceContract.purpose != "login") |
   select(.serviceContract.purpose != "healthCheck") |

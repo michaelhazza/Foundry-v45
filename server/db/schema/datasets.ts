@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, integer, json, index } from 'drizzle-orm/pg-core';
-import { projects } from './projects.js';
-import { processingJobs } from './processingJobs.js';
+import { projects } from './projects';
+import { processingJobs } from './processingJobs';
 
 export const datasetFormatEnum = ['conversationalJsonl', 'qaPairsJson', 'rawStructuredJson'] as const;
 export const retentionPolicyEnum = ['untilDeleted'] as const;

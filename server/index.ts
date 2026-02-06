@@ -37,6 +37,20 @@ app.use(canonicalSchemasRoutes);
 app.use(processingJobsRoutes);
 app.use(datasetsRoutes);
 
+// JSON parse error handler
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid JSON in request body' });
+  }
+  next(err);
+});
+
+// Global error handler
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err.message);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 // Serve static files in production
 if (config.isProduction) {
   const clientDist = path.resolve('dist/client');

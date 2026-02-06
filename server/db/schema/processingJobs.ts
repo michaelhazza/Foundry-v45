@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, json, index } from 'drizzle-orm/pg-core';
-import { projects } from './projects.js';
+import { projects } from './projects';
 
 export const jobStatusEnum = ['queued', 'processing', 'completed', 'failed'] as const;
 export const triggeredByEnum = ['user', 'system', 'scheduler'] as const;

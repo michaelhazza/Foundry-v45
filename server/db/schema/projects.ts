@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, integer, json, index } from 'drizzle-orm/pg-core';
-import { organisations } from './organisations.js';
-import { users } from './users.js';
+import { organisations } from './organisations';
+import { users } from './users';
 
 export const projectStatusEnum = ['draft', 'active', 'archived'] as const;
 
